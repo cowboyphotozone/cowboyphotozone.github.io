@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Photo Zone with Cowboys</title>
+  <!-- Use Google Fonts Rye as cowboy-style font -->
+  <link href="https://fonts.googleapis.com/css2?family=Rye&display=swap" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #222;
+      font-family: sans-serif;
+    }
+    #container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    video, canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
+    canvas { display: none; }
+
+    /* Title at top center with Rye font */
+    #title {
+      position: absolute;
+      top: 20px;
+      width: 100%;
+      text-align: center;
+      font-family: 'Rye', serif;
+      font-size: 60px;
+      color: white;
+      z-index: 2;
+      pointer-events: none;
+      text-shadow: 2px 2px 4px #000;
+    }
+
+    /* Capture button at top center below title */
+    #capture {
+      position: absolute;
+      top: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      border: 2px solid white;
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      font-family: 'Rye', serif;
+      font-size: 36px;
+      color: white;
+      cursor: pointer;
+      z-index: 2;
+      text-shadow: 1px 1px 2px #000;
+    }
+    #capture:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    /* Four previews bottom-aligned */
+    .cowboy-preview {
+      position: absolute;
+      bottom: 0;
+      height: 60vh;
+      width: auto;
+      z-index: 1;
+    }
+    #cowboy1 { left:  0%;  bottom: 0; }
+    #cowboy2 { left: 15%;  bottom: 0; }
+    #cowboy3 { left: 60%;  bottom: -10vh; }
+    #cowboy4 { left: 65%;  bottom: -5vh;  height: 80vh; }
+
+    #result {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.8);
+      visibility: hidden;
+      z-index: 3;
+    }
+    #result.show { visibility: visible; }
+    #result img {
+      max-width: 90vw;
+      max-height: 90vh;
+      border: 2px solid #fff;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <audio id="shutterSound" src="audio1.wav" preload="auto"></audio>
+
+    <!-- Previews -->
+    <img id="cowboy1" class="cowboy-preview" src="cowboy1.png">
+    <img id="cowboy2" class="cowboy-preview" src="cowboy2.png">
+    <img id="cowboy3" class="cowboy-preview" src="cowboy3.png">
+    <img id="cowboy4" class="cowboy-preview" src="cowboy4.png">
+
+    <div id="title">Take a picture with our town's cowboys!</div>
+    <button id="capture" disabled>Capture Photo</button>
+  </div>
+
+  <div id="result" onclick="this.classList.remove('show')">
+    <img id="snapshot" src="">
+  </div>
+
+  <script>
+    const previews = [...document.querySelectorAll('.cowboy-preview')];
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const captureBtn = document.getElementById('capture');
+    const result = document.getElementById('result');
+    const snapshot = document.getElementById('snapshot');
+    const shutter = document.getElementById('shutterSound');
+
+    // Resize canvas
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Auto-start camera on HTTPS
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => video.srcObject = stream)
+      .then(() => video.play())
+      .then(() => captureBtn.disabled = false)
+      .catch(e => {
+        console.error('Camera error:', e);
+        alert('Cannot access camera. Use HTTPS or localhost.');
+      });
+
+    // Trim previews
+    previews.forEach(img => {
+      img.onload = () => {
+        const off = document.createElement('canvas');
+        off.width = img.naturalWidth;
+        off.height = img.naturalHeight;
+        const octx = off.getContext('2d');
+        octx.drawImage(img, 0, 0);
+        const data = octx.getImageData(0, 0, off.width, off.height).data;
+        let bottom = -1;
+        for (let y = off.height - 1; y >= 0; y--) {
+          for (let x = 0; x < off.width; x++) {
+            if (data[(y * off.width + x) * 4 + 3] > 0) { bottom = y; break; }
+          }
+          if (bottom >= 0) break;
+        }
+        if (bottom < 0) return;
+        const crop = document.createElement('canvas');
+        crop.width = off.width;
+        crop.height = bottom + 1;
+        crop.getContext('2d').drawImage(off, 0, 0, off.width, bottom + 1, 0, 0, off.width, bottom + 1);
+        img.src = crop.toDataURL();
+      };
+    });
+
+    // Capture photo
+    captureBtn.addEventListener('click', () => {
+      shutter.play();
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      previews.forEach(img => {
+        const r = img.getBoundingClientRect();
+        ctx.drawImage(img, r.left, r.top, r.width, r.height);
+      });
+      snapshot.src = canvas.toDataURL('image/png');
+      result.classList.add('show');
+    });
+  </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
